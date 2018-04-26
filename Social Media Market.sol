@@ -4,18 +4,18 @@ pragma solidity ^0.4.16;
  * Abstract Token Smart Contract.  Copyright © 2017 by ABDK Consulting.
  * Author: Mikhail Vladimirov <mikhail.vladimirov@gmail.com>
  */
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.20;
 
 /*
- * ERC-20 Standard Token Smart Contract Interface.
- * Copyright © 2016–2017 by ABDK Consulting.
+ * EIP-20 Standard Token Smart Contract Interface.
+ * Copyright © 2016–2018 by ABDK Consulting.
  * Author: Mikhail Vladimirov <mikhail.vladimirov@gmail.com>
  */
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.20;
 
 /**
  * ERC-20 standard token interface, as defined
- * <a href="http://github.com/ethereum/EIPs/issues/20">here</a>.
+ * <a href="https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md">here</a>.
  */
 contract Token {
   /**
@@ -23,7 +23,7 @@ contract Token {
    *
    * @return total number of tokens in circulation
    */
-  function totalSupply () constant returns (uint256 supply);
+  function totalSupply () public view returns (uint256 supply);
 
   /**
    * Get number of tokens currently belonging to given owner.
@@ -32,7 +32,7 @@ contract Token {
    *        owner of
    * @return number of tokens currently belonging to the owner of given address
    */
-  function balanceOf (address _owner) constant returns (uint256 balance);
+  function balanceOf (address _owner) public view returns (uint256 balance);
 
   /**
    * Transfer given number of tokens from message sender to given recipient.
@@ -41,7 +41,8 @@ contract Token {
    * @param _value number of tokens to transfer to the owner of given address
    * @return true if tokens were transferred successfully, false otherwise
    */
-  function transfer (address _to, uint256 _value) returns (bool success);
+  function transfer (address _to, uint256 _value)
+  public returns (bool success);
 
   /**
    * Transfer given number of tokens from given owner to given recipient.
@@ -53,7 +54,7 @@ contract Token {
    * @return true if tokens were transferred successfully, false otherwise
    */
   function transferFrom (address _from, address _to, uint256 _value)
-  returns (bool success);
+  public returns (bool success);
 
   /**
    * Allow given spender to transfer given number of tokens from message sender.
@@ -63,7 +64,8 @@ contract Token {
    * @param _value number of tokens to allow to transfer
    * @return true if token transfer was successfully approved, false otherwise
    */
-  function approve (address _spender, uint256 _value) returns (bool success);
+  function approve (address _spender, uint256 _value)
+  public returns (bool success);
 
   /**
    * Tell how many tokens given spender is currently allowed to transfer from
@@ -76,8 +78,8 @@ contract Token {
    * @return number of tokens given spender is currently allowed to transfer
    *         from given owner
    */
-  function allowance (address _owner, address _spender) constant
-  returns (uint256 remaining);
+  function allowance (address _owner, address _spender)
+  public view returns (uint256 remaining);
 
   /**
    * Logged when tokens were transferred from one owner to another.
@@ -100,12 +102,11 @@ contract Token {
   event Approval (
     address indexed _owner, address indexed _spender, uint256 _value);
 }
-
 /*
  * Safe Math Smart Contract.  Copyright © 2016–2017 by ABDK Consulting.
  * Author: Mikhail Vladimirov <mikhail.vladimirov@gmail.com>
  */
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.20;
 
 /**
  * Provides methods to safely add, subtract and multiply uint256 numbers.
@@ -122,7 +123,7 @@ contract SafeMath {
    * @return x + y
    */
   function safeAdd (uint256 x, uint256 y)
-  constant internal
+  pure internal
   returns (uint256 z) {
     assert (x <= MAX_UINT256 - y);
     return x + y;
@@ -136,7 +137,7 @@ contract SafeMath {
    * @return x - y
    */
   function safeSub (uint256 x, uint256 y)
-  constant internal
+  pure internal
   returns (uint256 z) {
     assert (x >= y);
     return x - y;
@@ -150,7 +151,7 @@ contract SafeMath {
    * @return x * y
    */
   function safeMul (uint256 x, uint256 y)
-  constant internal
+  pure internal
   returns (uint256 z) {
     if (y == 0) return 0; // Prevent division by zero at the next line
     assert (x <= MAX_UINT256 / y);
@@ -167,7 +168,7 @@ contract AbstractToken is Token, SafeMath {
   /**
    * Create new Abstract Token contract.
    */
-  function AbstractToken () {
+  function AbstractToken () public {
     // Do nothing
   }
 
@@ -178,7 +179,7 @@ contract AbstractToken is Token, SafeMath {
    *        owner of
    * @return number of tokens currently belonging to the owner of given address
    */
-  function balanceOf (address _owner) constant returns (uint256 balance) {
+  function balanceOf (address _owner) public view returns (uint256 balance) {
     return accounts [_owner];
   }
 
@@ -189,10 +190,12 @@ contract AbstractToken is Token, SafeMath {
    * @param _value number of tokens to transfer to the owner of given address
    * @return true if tokens were transferred successfully, false otherwise
    */
-  function transfer (address _to, uint256 _value) returns (bool success) {
-    if (accounts [msg.sender] < _value) return false;
+  function transfer (address _to, uint256 _value)
+  public returns (bool success) {
+    uint256 fromBalance = accounts [msg.sender];
+    if (fromBalance < _value) return false;
     if (_value > 0 && msg.sender != _to) {
-      accounts [msg.sender] = safeSub (accounts [msg.sender], _value);
+      accounts [msg.sender] = safeSub (fromBalance, _value);
       accounts [_to] = safeAdd (accounts [_to], _value);
     }
     Transfer (msg.sender, _to, _value);
@@ -209,15 +212,17 @@ contract AbstractToken is Token, SafeMath {
    * @return true if tokens were transferred successfully, false otherwise
    */
   function transferFrom (address _from, address _to, uint256 _value)
-  returns (bool success) {
-    if (allowances [_from][msg.sender] < _value) return false;
-    if (accounts [_from] < _value) return false;
+  public returns (bool success) {
+    uint256 spenderAllowance = allowances [_from][msg.sender];
+    if (spenderAllowance < _value) return false;
+    uint256 fromBalance = accounts [_from];
+    if (fromBalance < _value) return false;
 
     allowances [_from][msg.sender] =
-      safeSub (allowances [_from][msg.sender], _value);
+      safeSub (spenderAllowance, _value);
 
     if (_value > 0 && _from != _to) {
-      accounts [_from] = safeSub (accounts [_from], _value);
+      accounts [_from] = safeSub (fromBalance, _value);
       accounts [_to] = safeAdd (accounts [_to], _value);
     }
     Transfer (_from, _to, _value);
@@ -232,7 +237,8 @@ contract AbstractToken is Token, SafeMath {
    * @param _value number of tokens to allow to transfer
    * @return true if token transfer was successfully approved, false otherwise
    */
-  function approve (address _spender, uint256 _value) returns (bool success) {
+  function approve (address _spender, uint256 _value)
+  public returns (bool success) {
     allowances [msg.sender][_spender] = _value;
     Approval (msg.sender, _spender, _value);
 
@@ -250,8 +256,8 @@ contract AbstractToken is Token, SafeMath {
    * @return number of tokens given spender is currently allowed to transfer
    *         from given owner
    */
-  function allowance (address _owner, address _spender) constant
-  returns (uint256 remaining) {
+  function allowance (address _owner, address _spender)
+  public view returns (uint256 remaining) {
     return allowances [_owner][_spender];
   }
 
@@ -259,35 +265,29 @@ contract AbstractToken is Token, SafeMath {
    * Mapping from addresses of token holders to the numbers of tokens belonging
    * to these token holders.
    */
-  mapping (address => uint256) accounts;
+  mapping (address => uint256) internal accounts;
 
   /**
    * Mapping from addresses of token holders to the mapping of addresses of
    * spenders to the allowances set by these token holders to these spenders.
    */
-  mapping (address => mapping (address => uint256)) private allowances;
+  mapping (address => mapping (address => uint256)) internal allowances;
 }
 
 
 /**
- * Social Media token smart contract.
+ * Social Media Market token smart contract.
  */
-contract SocialMediaToken is AbstractToken {
-  /**
-   * Maximum allowed number of tokens in circulation.
-   */
-  uint256 constant MAX_TOKEN_COUNT =
-    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-
+contract SocialMediaMarketToken is AbstractToken {
   /**
    * Address of the owner of this smart contract.
    */
   address private owner;
 
   /**
-   * Current number of tokens in circulation.
+   * Total number of tokens in circulation.
    */
-  uint256 tokenCount = 0;
+  uint256 tokenCount;
 
   /**
    * True if tokens transfers are currently frozen, false otherwise.
@@ -295,11 +295,16 @@ contract SocialMediaToken is AbstractToken {
   bool frozen = false;
 
   /**
-   * Create new Social Media token smart contract and make msg.sender the
-   * owner of this smart contract.
+   * Create new Social Media Market token smart contract, with given number of tokens issued
+   * and given to msg.sender, and make msg.sender the owner of this smart
+   * contract.
+   *
+   * @param _tokenCount number of tokens to issue and give to msg.sender
    */
-  function SocialMediaToken () {
+  function SocialMediaMarketToken (uint256 _tokenCount) public {
     owner = msg.sender;
+    tokenCount = _tokenCount;
+    accounts [msg.sender] = _tokenCount;
   }
 
   /**
@@ -307,7 +312,7 @@ contract SocialMediaToken is AbstractToken {
    *
    * @return total number of tokens in circulation
    */
-  function totalSupply () constant returns (uint256 supply) {
+  function totalSupply () public view returns (uint256 supply) {
     return tokenCount;
   }
 
@@ -316,8 +321,8 @@ contract SocialMediaToken is AbstractToken {
    *
    * @return name of this token
    */
-  function name () constant returns (string result) {
-    return "Social Media Token";
+  function name () public pure returns (string result) {
+    return "Social Media Market";
   }
 
   /**
@@ -325,7 +330,7 @@ contract SocialMediaToken is AbstractToken {
    *
    * @return symbol of this token
    */
-  function symbol () constant returns (string result) {
+  function symbol () public pure returns (string result) {
     return "SMT";
   }
 
@@ -334,7 +339,7 @@ contract SocialMediaToken is AbstractToken {
    *
    * @return number of decimals for this token
    */
-  function decimals () constant returns (uint8 result) {
+  function decimals () public pure returns (uint8 result) {
     return 8;
   }
 
@@ -345,7 +350,8 @@ contract SocialMediaToken is AbstractToken {
    * @param _value number of tokens to transfer to the owner of given address
    * @return true if tokens were transferred successfully, false otherwise
    */
-  function transfer (address _to, uint256 _value) returns (bool success) {
+  function transfer (address _to, uint256 _value)
+    public returns (bool success) {
     if (frozen) return false;
     else return AbstractToken.transfer (_to, _value);
   }
@@ -360,7 +366,7 @@ contract SocialMediaToken is AbstractToken {
    * @return true if tokens were transferred successfully, false otherwise
    */
   function transferFrom (address _from, address _to, uint256 _value)
-    returns (bool success) {
+    public returns (bool success) {
     if (frozen) return false;
     else return AbstractToken.transferFrom (_from, _to, _value);
   }
@@ -379,7 +385,7 @@ contract SocialMediaToken is AbstractToken {
    * @return true if token transfer was successfully approved, false otherwise
    */
   function approve (address _spender, uint256 _currentValue, uint256 _newValue)
-    returns (bool success) {
+    public returns (bool success) {
     if (allowance (msg.sender, _spender) == _currentValue)
       return approve (_spender, _newValue);
     else return false;
@@ -391,33 +397,15 @@ contract SocialMediaToken is AbstractToken {
    * @param _value number of tokens to burn
    * @return true on success, false on error
    */
-  function burnTokens (uint256 _value) returns (bool success) {
+  function burnTokens (uint256 _value) public returns (bool success) {
     if (_value > accounts [msg.sender]) return false;
     else if (_value > 0) {
       accounts [msg.sender] = safeSub (accounts [msg.sender], _value);
       tokenCount = safeSub (tokenCount, _value);
+
+      Transfer (msg.sender, address (0), _value);
       return true;
     } else return true;
-  }
-
-  /**
-   * Create _value new tokens and give new created tokens to msg.sender.
-   * May only be called by smart contract owner.
-   *
-   * @param _value number of tokens to create
-   * @return true if tokens were created successfully, false otherwise
-   */
-  function createTokens (uint256 _value)
-    returns (bool success) {
-    require (msg.sender == owner);
-
-    if (_value > 0) {
-      if (_value > safeSub (MAX_TOKEN_COUNT, tokenCount)) return false;
-      accounts [msg.sender] = safeAdd (accounts [msg.sender], _value);
-      tokenCount = safeAdd (tokenCount, _value);
-    }
-
-    return true;
   }
 
   /**
@@ -426,7 +414,7 @@ contract SocialMediaToken is AbstractToken {
    *
    * @param _newOwner address of new owner of the smart contract
    */
-  function setOwner (address _newOwner) {
+  function setOwner (address _newOwner) public {
     require (msg.sender == owner);
 
     owner = _newOwner;
@@ -436,7 +424,7 @@ contract SocialMediaToken is AbstractToken {
    * Freeze token transfers.
    * May only be called by smart contract owner.
    */
-  function freezeTransfers () {
+  function freezeTransfers () public {
     require (msg.sender == owner);
 
     if (!frozen) {
@@ -449,7 +437,7 @@ contract SocialMediaToken is AbstractToken {
    * Unfreeze token transfers.
    * May only be called by smart contract owner.
    */
-  function unfreezeTransfers () {
+  function unfreezeTransfers () public {
     require (msg.sender == owner);
 
     if (frozen) {
